@@ -81,7 +81,7 @@ jobs:
             exit 1
           fi
 
-      - name: Start Telegram Bot
+            - name: Start Telegram Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
@@ -89,36 +89,113 @@ jobs:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MINI_APP_URL: ${{ env.MINI_APP_URL }}
           MINI_APP_PUBLIC_PATH: /mini-app/
         shell: bash
         run: |
           set -euo pipefail
 
-          PYTHONPATH="$GITHUB_WORKSPACE/telegram_userbot" python -m telegram_userbot.main &
-          BOT_PID=$!
+          start_tunnel() {
+            rm -f cloudflared.log
 
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:8008/mini-app/ > /dev/null; then
-              echo "Mini App is running."
-              break
-            fi
+            nohup ./cloudflared tunnel \
+              --url http://127.0.0.1:8008 \
+              > cloudflared.log 2>&1 &
 
-            if ! kill -0 "$BOT_PID" 2>/dev/null; then
-              echo "Bot process exited before Mini App became ready."
-              wait "$BOT_PID"
-              exit 1
-            fi
+            CLOUDFLARED_PID=$!
 
-            sleep 2
-          done
+            for i in {1..30}; do
+              TUNNEL_URL=$(grep -oE 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
 
-          if ! curl -fsS http://127.0.0.1:8008/mini-app/ > /dev/null; then
+              if [ -n "$TUNNEL_URL" ]; then
+                echo "New Tunnel URL: $TUNNEL_URL"
+                return 0
+              fi
+
+              if ! kill -0 "$CLOUDFLARED_PID" 2>/dev/null; then
+                echo "Cloudflare tunnel process exited."
+                return 1
+              fi
+
+              sleep 2
+            done
+
+            echo "Could not get a new Cloudflare Tunnel URL."
+            cat cloudflared.log
+            return 1
+          }
+
+          start_bot() {
+            echo "Starting Telegram Bot with:"
+            echo "MINI_APP_URL=$TUNNEL_URL"
+
+            MINI_APP_URL="$TUNNEL_URL" \
+            PYTHONPATH="$GITHUB_WORKSPACE/telegram_userbot" \
+            python -m telegram_userbot.main &
+
+            BOT_PID=$!
+
+            for i in {1..30}; do
+              if curl -fsS --max-time 5 \
+                http://127.0.0.1:8008/mini-app/ > /dev/null; then
+                echo "Mini App is running."
+                return 0
+              fi
+
+              if ! kill -0 "$BOT_PID" 2>/dev/null; then
+                echo "Bot process exited."
+                wait "$BOT_PID"
+                return 1
+              fi
+
+              sleep 2
+            done
+
             echo "Mini App did not become ready."
-            kill "$BOT_PID" 2>/dev/null || true
-            wait "$BOT_PID" || true
+            return 1
+          }
+
+          if ! start_tunnel; then
             exit 1
           fi
 
-          echo "Telegram Bot + Mini App are running."
-          wait "$BOT_PID"
+          if ! start_bot; then
+            exit 1
+          fi
+
+          echo "Telegram Bot + Mini App + Watchdog are running."
+
+          while true; do
+            sleep 60
+
+            echo "Watchdog: checking Mini App and Cloudflare Tunnel..."
+
+            if curl -fsS --max-time 15 \
+              "$TUNNEL_URL/mini-app/" > /dev/null; then
+              echo "Watchdog: Mini App is healthy."
+              continue
+            fi
+
+            echo "Watchdog: Tunnel is DOWN. Creating a new tunnel..."
+
+            kill "$CLOUDFLARED_PID" 2>/dev/null || true
+            wait "$CLOUDFLARED_PID" 2>/dev/null || true
+
+            if ! start_tunnel; then
+              echo "Watchdog: failed to create new tunnel."
+              continue
+            fi
+
+            echo "Watchdog: restarting bot with new Mini App URL..."
+
+            kill "$BOT_PID" 2>/dev/null || true
+            wait "$BOT_PID" 2>/dev/null || true
+
+            sleep 3
+
+            if ! start_bot; then
+              echo "Watchdog: bot restart failed."
+              exit 1
+            fi
+
+            echo "Watchdog: recovery successful."
+          done
