@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Live VC</title>
+    <link rel="stylesheet" href="static/styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div class="eyebrow">HOSTED TELEGRAM</div>
+        <h1>Live VC</h1>
+        <p class="lede">Your private control surface for the connected Voice Chat.</p>
+      </header>
+
+      <section id="notice" class="notice" role="status" aria-live="polite">
+        Authenticating with Telegram…
+      </section>
+
+      <section class="status-grid" aria-label="Connection status">
+        <article class="status-card">
+          <span class="label">Account</span>
+          <strong id="account-status">Checking</strong>
+          <span id="account-detail" class="detail">Waiting for Telegram</span>
+        </article>
+        <article class="status-card">
+          <span class="label">Voice Chat</span>
+          <strong id="vc-status">Checking</strong>
+          <span id="vc-detail" class="detail">Waiting for account</span>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">LIVE AUDIO</span>
+            <h2>Microphone bridge</h2>
+          </div>
+          <span id="refresh-state" class="pulse" aria-label="Live status indicator"></span>
+        </div>
+        <dl class="facts">
+          <div><dt>Live audio</dt><dd id="live-status">Stopped</dd></div>
+          <div><dt>Microphone</dt><dd id="mic-status">Off</dd></div>
+          <div><dt>Frames sent</dt><dd id="frame-status">0</dd></div>
+        </dl>
+        <p id="live-detail" class="muted">Use <code>.vcjoin</code> from the control bot first, then start the live microphone.</p>
+
+        <div class="live-controls">
+          <button id="start-live" class="button" type="button" disabled>Start Live</button>
+          <button id="stop-live" class="button secondary" type="button" disabled>Stop Live</button>
+        </div>
+
+        <div class="control-row">
+          <div>
+            <span class="control-label">Microphone</span>
+            <span id="mic-detail" class="control-detail">Audio is not being sent</span>
+          </div>
+          <button id="mic-toggle" class="toggle" type="button" aria-pressed="false" disabled>Mic OFF</button>
+        </div>
+
+        <div class="control-row">
+          <div>
+            <span class="control-label">Push-to-talk</span>
+            <span id="ptt-detail" class="control-detail">Mic sends while enabled</span>
+          </div>
+          <button id="ptt-toggle" class="toggle" type="button" aria-pressed="false" disabled>PTT OFF</button>
+        </div>
+        <button id="talk" class="talk-button" type="button" disabled>Hold to Talk</button>
+
+        <div class="gain-control">
+          <div class="gain-heading">
+            <span class="control-label">Microphone gain</span>
+            <strong><span id="gain-value">100</span>%</strong>
+          </div>
+          <div class="gain-input-row">
+            <input id="gain" type="number" min="0" max="100000000" step="1" value="100" disabled />
+            <span>%</span>
+          </div>
+          <div class="gain-presets" aria-label="Gain presets">
+            <button class="gain-preset" type="button" data-gain="100" disabled>100 normal</button>
+            <button class="gain-preset" type="button" data-gain="200" disabled>200 2x</button>
+            <button class="gain-preset" type="button" data-gain="500" disabled>500 5x</button>
+            <button class="gain-preset" type="button" data-gain="1000" disabled>1000 10x</button>
+          </div>
+          <div class="gain-scale"><span>0 mute</span><span>Custom values up to 100000000%</span></div>
+        </div>
+      </section>
+
+      <button id="retry" class="button" type="button" hidden>Try again</button>
+    </main>
+    <script src="static/app.js"></script>
+  </body>
+</html>

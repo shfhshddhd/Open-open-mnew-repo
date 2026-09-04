@@ -1,0 +1,99 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/
+
+# Local secrets and runtime state
+.env
+.venv/
+DB/
+telegram_userbot/DB/
+memory/keys_state.json
+memory/*.json
+telegram_userbot/plugins.backup-before-sraid/
+telegram_userbot/plugins/*.backup
+telegram_userbot/plugins/sraid_data.json
+telegram_userbot/sudo_users.json
+backups/
+temp_clone_photo*.jpg
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Replit/development artifacts not needed for deployment
+attached_assets/
+screenshots/
+artifacts/
+
+# Internal development notes
+.agents/
+
+# Exclude old Replit/Node workspace files
+.npmrc
+.replit
+.replitignore
+replit.nix
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+flex-requirements.txt
+lib/
+scripts/
+tsconfig.base.json
+tsconfig.json
+
+# Runtime/private state
+.env
+DB/
+telegram_userbot/DB/
+telegram_userbot/sudo_users.json
+telegram_userbot/plugins.backup-before-sraid/
+telegram_userbot/plugins/*.backup
+telegram_userbot/plugins/sraid_data.json
+memory/keys_state.json
