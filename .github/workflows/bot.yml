@@ -69,6 +69,7 @@ jobs:
             if [ -n "$TUNNEL_URL" ]; then
               echo "MINI_APP_URL=$TUNNEL_URL" >> "$GITHUB_ENV"
               echo "Cloudflare Quick Tunnel is ready."
+              echo "Tunnel URL: $TUNNEL_URL"
               break
             fi
 
