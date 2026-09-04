@@ -6,7 +6,6 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-22.04
-    timeout-minutes: 350
 
     steps:
       - name: Checkout repository
