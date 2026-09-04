@@ -47,7 +47,7 @@ jobs:
             Telethon==1.44.0 \
             yt-dlp==2026.8.19
 
-      - name: Start Cloudflare Quick Tunnel
+      - name: Download Cloudflare
         shell: bash
         run: |
           set -euo pipefail
@@ -58,30 +58,7 @@ jobs:
 
           chmod +x cloudflared
 
-          nohup ./cloudflared tunnel \
-            --url http://127.0.0.1:8008 \
-            > cloudflared.log 2>&1 &
-
-          for i in {1..30}; do
-            TUNNEL_URL=$(grep -oE 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
-
-            if [ -n "$TUNNEL_URL" ]; then
-              echo "MINI_APP_URL=$TUNNEL_URL" >> "$GITHUB_ENV"
-              echo "Cloudflare Quick Tunnel is ready."
-              echo "Tunnel URL: $TUNNEL_URL"
-              break
-            fi
-
-            sleep 2
-          done
-
-          if [ -z "${TUNNEL_URL:-}" ]; then
-            echo "Cloudflare Quick Tunnel URL was not detected."
-            cat cloudflared.log
-            exit 1
-          fi
-
-            - name: Start Telegram Bot
+      - name: Start Telegram Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
@@ -113,6 +90,7 @@ jobs:
 
               if ! kill -0 "$CLOUDFLARED_PID" 2>/dev/null; then
                 echo "Cloudflare tunnel process exited."
+                cat cloudflared.log
                 return 1
               fi
 
