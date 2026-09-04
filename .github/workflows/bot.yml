@@ -90,6 +90,7 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MINI_APP_URL: ${{ env.MINI_APP_URL }}
+          MINI_APP_PUBLIC_PATH: /mini-app/
         shell: bash
         run: |
           set -euo pipefail
