@@ -94,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python -m telegram_userbot.main &
+          PYTHONPATH="$GITHUB_WORKSPACE/telegram_userbot" python -m telegram_userbot.main &
           BOT_PID=$!
 
           for i in {1..30}; do
