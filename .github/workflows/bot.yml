@@ -1,14 +1,15 @@
-name: Test Environment
+name: Telegram Userbot
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
+  run-bot:
     runs-on: ubuntu-22.04
+    timeout-minutes: 350
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Python 3.12
@@ -16,18 +17,107 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install FFmpeg
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg curl
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install py-tgcalls==2.3.3 Telethon==1.44.0 aiohttp==3.11.11 pymongo==4.9.2 motor==3.6.0 yt-dlp==2026.8.19
+          pip install \
+            aiohttp==3.11.11 \
+            beautifulsoup4==4.12.3 \
+            edge-tts==7.2.8 \
+            GitPython==3.1.44 \
+            google-generativeai==0.8.6 \
+            lxml==6.1.2 \
+            motor==3.6.0 \
+            openai==2.28.0 \
+            pillow==11.1.0 \
+            psutil==7.2.2 \
+            py-tgcalls==2.3.3 \
+            pyfiglet==1.0.2 \
+            pymongo==4.9.2 \
+            python-dotenv==1.0.1 \
+            python-telegram-bot==21.10 \
+            replit==4.1.2 \
+            requests==2.32.3 \
+            rich==13.9.3 \
+            speedtest-cli==2.1.3 \
+            Telethon==1.44.0 \
+            yt-dlp==2026.8.19
 
-      - name: Verify
+      - name: Start Cloudflare Quick Tunnel
+        shell: bash
         run: |
-          python --version
-          ffmpeg -version
-          python -c "import aiohttp, telethon, pymongo, motor, yt_dlp; print('Dependencies OK')"
+          set -euo pipefail
+
+          curl -L --fail \
+            -o cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+
+          chmod +x cloudflared
+
+          nohup ./cloudflared tunnel \
+            --url http://127.0.0.1:8008 \
+            > cloudflared.log 2>&1 &
+
+          for i in {1..30}; do
+            TUNNEL_URL=$(grep -oE 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
+
+            if [ -n "$TUNNEL_URL" ]; then
+              echo "MINI_APP_URL=$TUNNEL_URL" >> "$GITHUB_ENV"
+              echo "Cloudflare Quick Tunnel is ready."
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ -z "${TUNNEL_URL:-}" ]; then
+            echo "Cloudflare Quick Tunnel URL was not detected."
+            cat cloudflared.log
+            exit 1
+          fi
+
+      - name: Start Telegram Bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MINI_APP_URL: ${{ env.MINI_APP_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python -m telegram_userbot.main &
+          BOT_PID=$!
+
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8008/mini-app/ > /dev/null; then
+              echo "Mini App is running."
+              break
+            fi
+
+            if ! kill -0 "$BOT_PID" 2>/dev/null; then
+              echo "Bot process exited before Mini App became ready."
+              wait "$BOT_PID"
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          if ! curl -fsS http://127.0.0.1:8008/mini-app/ > /dev/null; then
+            echo "Mini App did not become ready."
+            kill "$BOT_PID" 2>/dev/null || true
+            wait "$BOT_PID" || true
+            exit 1
+          fi
+
+          echo "Telegram Bot + Mini App are running."
+          wait "$BOT_PID"
