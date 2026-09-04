@@ -1,0 +1,33 @@
+name: Test Environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install py-tgcalls==2.3.3 Telethon==1.44.0 aiohttp==3.11.11 pymongo==4.9.2 motor==3.6.0 yt-dlp==2026.8.19
+
+      - name: Verify
+        run: |
+          python --version
+          ffmpeg -version
+          python -c "import aiohttp, telethon, pymongo, motor, yt_dlp; print('Dependencies OK')"
