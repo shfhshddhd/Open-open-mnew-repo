@@ -85,6 +85,11 @@ class UserbotClient:
         self._running = False
         voice_chat_manager = getattr(self.client, "_voice_chat_manager", None)
         if voice_chat_manager is not None:
+            bridge = getattr(voice_chat_manager, "_vc_bridge", None)
+            if bridge is not None:
+                with contextlib.suppress(Exception):
+                    await bridge.shutdown()
+                voice_chat_manager._vc_bridge = None
             try:
                 await voice_chat_manager.shutdown()
             except Exception:

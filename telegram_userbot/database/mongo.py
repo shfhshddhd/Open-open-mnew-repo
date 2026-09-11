@@ -274,6 +274,9 @@ async def connect() -> Any:
             [("user_id", 1), ("chat_id", 1), ("participant_id", 1)],
             unique=True,
         )
+        # One private VC control group per hosted user (and one owner per group).
+        await database.private_vc_controls.create_index("user_id", unique=True)
+        await database.private_vc_controls.create_index("control_chat_id", unique=True)
     except Exception as exc:
         client.close()
         _client = None
@@ -883,6 +886,46 @@ async def clear_monitoring_data(
     ]
     await get_db().setgroup_map.delete_many(mapping_filter)
     return forwarded_ids
+
+
+# ── Private VC control group mappings ───────────────────────────────────────────
+
+async def set_private_vc_control(user_id: int, control_chat_id: int) -> None:
+    """Register (or move) the private VC control group for a hosted user."""
+    now = datetime.now(timezone.utc)
+    await get_db().private_vc_controls.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "user_id": user_id,
+                "control_chat_id": int(control_chat_id),
+                "active": True,
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+async def get_private_vc_control(user_id: int) -> dict | None:
+    return await get_db().private_vc_controls.find_one(
+        {"user_id": user_id, "active": True},
+        {"_id": 0},
+    )
+
+
+async def get_private_vc_control_by_chat(control_chat_id: int) -> dict | None:
+    """Reverse lookup: who owns this control group (if active)?"""
+    return await get_db().private_vc_controls.find_one(
+        {"control_chat_id": int(control_chat_id), "active": True},
+        {"_id": 0},
+    )
+
+
+async def clear_private_vc_control(user_id: int) -> None:
+    """Remove the private VC control mapping (unhost cleanup)."""
+    await get_db().private_vc_controls.delete_many({"user_id": int(user_id)})
 
 
 # ── Bulk load ──────────────────────────────────────────────────────────────────

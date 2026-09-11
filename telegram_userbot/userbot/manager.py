@@ -60,6 +60,7 @@ class UserbotManager:
             await self._clients[user_id].stop()
             del self._clients[user_id]
         await db.delete_user(user_id)
+        await db.clear_private_vc_control(user_id)
 
     def is_hosted(self, user_id: int) -> bool:
         return user_id in self._clients and self._clients[user_id].is_running()
