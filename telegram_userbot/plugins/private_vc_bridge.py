@@ -51,7 +51,6 @@ from telethon.tl import types as tl_types
 from telethon.utils import get_peer_id
 
 import database.mongo as db
-from plugins.bot import add_handler
 
 logger = logging.getLogger(__name__)
 
@@ -761,6 +760,10 @@ async def init(client_instance):
 
 
 async def register_commands():
+    # Lazy import: ``plugins.bot`` depends on the compatibility aliases that
+    # plugin_loader installs at host time. Importing it eagerly from the
+    # control-bot handler tree would fail at startup on a fresh checkout.
+    from plugins.bot import add_handler
     add_handler(
         'private_vc_bridge',
         [
