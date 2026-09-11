@@ -284,6 +284,10 @@ class VoiceChatManager:
                     )
                     voice_ai_reached = voice_ai_active and len(payload) > 0
                     if payload:
+                        bridge = getattr(self, '_vc_bridge', None) if getattr(self, '_vc_bridge', None) is not None else getattr(getattr(self, 'state', None), '_bridge', None)
+                        if bridge is not None:
+                            with contextlib.suppress(Exception):
+                                bridge.on_source_frames(update_chat_id, payload)
                         for subscriber in tuple(state.receive_subscribers):
                             if subscriber.full():
                                 with contextlib.suppress(asyncio.QueueEmpty):

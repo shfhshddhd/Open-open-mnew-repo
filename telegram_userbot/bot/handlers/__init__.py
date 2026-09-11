@@ -23,6 +23,7 @@ from bot.handlers.gemini_keys import (
 )
 from bot.handlers.update_controls import update_control_callback
 from bot.handlers.voice_chat import build_voice_chat_handler
+from bot.handlers.voice_chat import build_private_vc_control_handler
 
 
 def register_all(app: Application, manager) -> None:
@@ -49,4 +50,5 @@ def register_all(app: Application, manager) -> None:
     app.add_handler(CommandHandler("switchkey", switchkey_command))
     # Dot-prefixed Voice Chat controls are deliberately private-chat only.
     app.add_handler(build_voice_chat_handler())
+    app.add_handler(build_private_vc_control_handler())
     app.add_handler(CallbackQueryHandler(update_control_callback, pattern=r"^self_update:"))

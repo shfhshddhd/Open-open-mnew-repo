@@ -11,6 +11,8 @@ from pathlib import Path
 from pytgcalls.exceptions import NoActiveGroupCall
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
+import database.mongo as db
+from plugins.private_vc_bridge import MAX_BASS, MAX_LEVEL, MIN_BASS, MIN_LEVEL
 from utils.message_ui import reply_html
 
 
@@ -211,4 +213,154 @@ def build_voice_chat_handler() -> MessageHandler:
         & filters.TEXT
         & filters.Regex(_VOICE_COMMAND_RE),
         voice_chat_command,
+    )
+
+_PRIVATE_VC_CONTROL_RE = re.compile(
+    r"^\s*/(?P<command>"
+    r"join|leave|leaveall|leaveplay|level|bass|mute|unmute|startrecord|stoprecord|speedtest"
+    r")"
+    r"(?:\s+(?P<args>.*?))?\s*$",
+    re.IGNORECASE,
+)
+
+
+async def _allowed_control_sender(message, registry_entry) -> bool:
+    """Only the private group's owner account or its group admins may control."""
+    if message is None or registry_entry is None:
+        return False
+    chat_id = message.chat_id
+    control_chat_id = int(registry_entry.get("control_chat_id", 0))
+    if chat_id != control_chat_id:
+        return False
+    user_id = int(message.from_user.id if message.from_user is not None else 0)
+    owner_user_id = int(registry_entry.get("user_id", 0))
+    if user_id == owner_user_id:
+        return True
+    sender_chat_member = await message.chat.get_member(user_id)
+    return bool(
+        getattr(sender_chat_member, "status", "")
+        in {"administrator", "creator"}
+    )
+
+
+async def _resolve_private_vc_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return None
+    if message.chat is None or message.chat.type != "group" and message.chat.type != "supergroup":
+        return None
+    registry_entry = await db.get_private_vc_control_by_chat(message.chat_id)
+    if registry_entry is None:
+        return None
+    if not await _allowed_control_sender(message, registry_entry):
+        return None
+    manager = context.bot_data.get("manager")
+    hosted = manager.get_client(int(registry_entry["user_id"])) if manager is not None else None
+    if hosted is None or not hosted.is_running():
+        return None
+    bridge = getattr(hosted.client, "_vc_bridge", None)
+    if bridge is None:
+        return None
+    voice = hosted.client._voice_chat_manager
+    if voice is None:
+        return None
+    return bridge, voice, int(registry_entry["user_id"])
+
+
+async def _parse_int_arg(args, command: str, minimum: int, maximum: int) -> int:
+    try:
+        value = int(args)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Usage: /{command} <{minimum}-{maximum}>") from exc
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{command.capitalize()} must be between {minimum} and {maximum}.")
+    return value
+
+
+async def private_vc_control_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    parsed = _PRIVATE_VC_CONTROL_RE.match(message.text or "")
+    if parsed is None:
+        return
+
+    resolved = await _resolve_private_vc_manager(update, context)
+    if resolved is None:
+        return
+    bridge, voice, hosted_user_id = resolved
+    command = parsed.group("command").lower()
+    args = (parsed.group("args") or "").strip()
+    source_chat_id = voice.state.chat_id if voice.state is not None else None
+    try:
+        if command == "join":
+            if source_chat_id is None:
+                raise ValueError("Join a source Voice Chat first with .vcjoin (or .play).")
+            text = await bridge.join(args, source_chat_id)
+        elif command == "leave":
+            text = await bridge.leave(int(args))
+        elif command == "leaveall":
+            await bridge.leave_all()
+            text = "Left all forwarding sessions."
+        elif command == "leaveplay":
+            if source_chat_id is not None:
+                text = await voice.leave(source_chat_id)
+
+                text = "Not connected to a source Voice Chat."
+        elif command == "level":
+            value = await _parse_int_arg(args, command, MIN_LEVEL, MAX_LEVEL)
+            text = await bridge.set_level(args2 if len(args.split()) > 1 else None, value)
+
+
+
+        elif command == "bass":
+            value = await _parse_int_arg(args, command, MIN_BASS, MAX_BASS)
+            text = await bridge.set_bass(
+                args2 if len(args.split()) > 1 else None,
+                value,
+            )
+        elif command == "mute":
+            text = await bridge.set_mute(args2 if len(args.split()) > 1 else None, True)
+
+
+
+        elif command == "unmute":
+            text = await bridge.set_mute(args2 if len(args.split()) > 1 else None, False)
+
+        elif command == "startrecord":
+            text = await bridge.start_recording(
+                args2 if len(args.split()) > 1 else None,
+            )
+        elif command == "stoprecord":
+            text = await bridge.stop_recording(
+                args2 if len(args.split()) > 1 else None,
+                message.chat_id,
+            )
+        elif command == "speedtest":
+            stats = bridge.speed_stats()
+            text = (
+                f"*VC-to-VC audio stats*\n"
+                f"Sessions: `{stats['sessions']}`\n"
+                f"Frames forwarded: `{stats['frames']}`\n"
+                f"Bytes forwarded: `{stats['bytes']}`\n"
+                f"Last frame received at: `{stats['last_frame_at']}`"
+            )
+        else:  # pragma: no cover - guarded by the command regex
+            return
+
+        await reply_html(message, text)
+    except Exception as exc:
+        await _reply_error(message, exc)
+
+
+def build_private_vc_control_handler() -> MessageHandler:
+    """Match the registered private control group's VC-to-VC slash commands."""
+    return MessageHandler(
+        filters.TEXT
+        & filters.Regex(_PRIVATE_VC_CONTROL_RE),
+        private_vc_control_command,
     )
